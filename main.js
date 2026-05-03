@@ -8,12 +8,20 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 
 program
-  .requiredOption('-H, --host <host>', 'адреса сервера')
-  .requiredOption('-p, --port <port>', 'порт сервера')
-  .requiredOption('-c, --cache <cache>', 'шлях до директорії кеша');
+  .requiredOption('-H, --host <host>', 'адреса сервера', process.env.HOST || '0.0.0.0')
+  .requiredOption('-p, --port <port>', 'порт сервера', process.env.PORT || 3000)
+  .requiredOption('-c, --cache <cache>', 'шлях до директорії кеша', './cache');
 
 program.parse(process.argv);
 const options = program.opts();
+
+const db = new DB({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
+});
 
 const cacheDir = path.resolve(options.cache);
 if (!fs.existsSync(cacheDir)) {
