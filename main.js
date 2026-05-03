@@ -10,9 +10,9 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const { Pool } = require('pg');
 
 program
-  .requiredOption('-H, --host <host>', 'адреса сервера', process.env.HOST || '0.0.0.0')
-  .requiredOption('-p, --port <port>', 'порт сервера', process.env.PORT || 3000)
-  .requiredOption('-c, --cache <cache>', 'шлях до директорії кеша', './cache');
+  .option('-H, --host <host>', 'адреса сервера', process.env.HOST || '0.0.0.0')
+  .option('-p, --port <port>', 'порт сервера', process.env.PORT || 3000)
+  .option('-c, --cache <cache>', 'шлях до директорії кеша', './cache');
 
 program.parse(process.argv);
 const options = program.opts();
@@ -30,13 +30,6 @@ if (!fs.existsSync(cacheDir)) {
   fs.mkdirSync(cacheDir, { recursive: true });
 }
 
-const dbPath = path.join(cacheDir, 'inventory.json');
-let inventoryDB = [];
-if (fs.existsSync(dbPath)) {
-  inventoryDB = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
-}
-const saveDB = () => fs.writeFileSync(dbPath, JSON.stringify(inventoryDB, null, 2));
-
 const app = express();
 const upload = multer({ dest: cacheDir });
 
@@ -49,13 +42,32 @@ const swaggerOptions = {
     info: {
       title: 'Inventory API',
       version: '1.0.0',
-      description: 'API для керування інвентарем (лабораторна робота)'
+      description: 'API для керування інвентарем з використанням PostgreSQL'
     },
     servers: [
       {
-        url: `http://${options.host}:${options.port}`
+        url: `http://localhost:${options.port}`,
       }
     ]
+    ,
+    components: {
+      schemas: {
+        Item: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            photo: { type: ['string', 'null'] },
+            photoUrl: { type: ['string', 'null'] }
+          }
+        },
+        Error: {
+          type: 'object',
+          properties: { message: { type: 'string' } }
+        }
+      }
+    }
   },
   apis: [path.resolve(__filename)]
 };
@@ -63,30 +75,10 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-/**
- * @openapi
- * /RegisterForm.html:
- *   get:
- *     summary: Отримати HTML форму реєстрації
- *     tags: [Pages]
- *     responses:
- *       200:
- *         description: HTML сторінка
- */
 app.get('/RegisterForm.html', (req, res) =>
   res.sendFile(path.join(__dirname, 'RegisterForm.html'))
 );
 
-/**
- * @openapi
- * /SearchForm.html:
- *   get:
- *     summary: Отримати HTML форму пошуку
- *     tags: [Pages]
- *     responses:
- *       200:
- *         description: HTML сторінка
- */
 app.get('/SearchForm.html', (req, res) =>
   res.sendFile(path.join(__dirname, 'SearchForm.html'))
 );
@@ -95,15 +87,15 @@ app.get('/SearchForm.html', (req, res) =>
  * @openapi
  * /register:
  *   post:
- *     summary: Реєстрація нового предмета
- *     tags: [Actions]
+ *     tags:
+ *       - Inventory
+ *     summary: Створити новий елемент інвентарю
  *     requestBody:
  *       required: true
  *       content:
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [inventory_name]
  *             properties:
  *               inventory_name:
  *                 type: string
@@ -112,84 +104,123 @@ app.get('/SearchForm.html', (req, res) =>
  *               photo:
  *                 type: string
  *                 format: binary
+ *             required:
+ *               - inventory_name
  *     responses:
- *       201:
- *         description: Предмет успішно створено
- *       400:
- *         description: Відсутній inventory_name
- *   x-other-methods:
- *     405:
- *       description: Method not allowed
+ *       '201':
+ *         description: Created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Item'
+ *       '400':
+ *         description: Bad Request
  */
-app.post('/register', upload.single('photo'), (req, res) => {
+app.post('/register', upload.single('photo'), async (req, res) => {
   const { inventory_name, description } = req.body;
   if (!inventory_name) {
     return res.status(400).send('Bad Request: inventory_name is required');
   }
 
-  const newItem = {
-    id: Date.now().toString(),
-    inventory_name,
-    description: description || '',
-    photo: req.file ? req.file.filename : null
-  };
-
-  inventoryDB.push(newItem);
-  saveDB();
-  res.status(201).json(newItem);
+  try {
+    const photo = req.file ? req.file.filename : null;
+    const query = 'INSERT INTO items (title, description, photo) VALUES ($1, $2, $3) RETURNING *';
+    const values = [inventory_name, description || '', photo];
+    
+    const { rows } = await pool.query(query, values);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Database Error');
+  }
 });
-app.all('/register', (req, res) => res.status(405).send('Method not allowed'));
 
 /**
  * @openapi
  * /inventory:
  *   get:
- *     summary: Отримати весь список інвентарю
- *     tags: [Inventory]
+ *     tags:
+ *       - Inventory
+ *     summary: Отримати список всіх елементів інвентарю
  *     responses:
- *       200:
- *         description: Масив об'єктів інвентарю
- *   x-other-methods:
- *     405:
- *       description: Method not allowed
+ *       '200':
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Items'
+ *       '500':
+ *         description: Server error
  */
-app.get('/inventory', (req, res) => {
-  const list = inventoryDB.map((item) => ({
-    ...item,
-    photoUrl: item.photo
-      ? `http://${options.host}:${options.port}/inventory/${item.id}/photo`
-      : null
-  }));
-  res.status(200).json(list);
+app.get('/inventory', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM items');
+    const list = rows.map((item) => ({
+      ...item,
+      photoUrl: item.photo
+        ? `http://localhost:${options.port}/inventory/${item.id}/photo`
+        : null
+    }));
+    res.status(200).json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Database Error');
+  }
 });
-app.all('/inventory', (req, res) => res.status(405).send('Method not allowed'));
 
 /**
  * @openapi
  * /inventory/{id}:
  *   get:
- *     summary: Отримати предмет за ID
- *     tags: [Inventory]
+ *     tags:
+ *       - Inventory
+ *     summary: Отримати деталі елементу по id
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
- *           type: string
+ *           type: integer
  *     responses:
- *       200:
- *         description: Предмет знайдено
- *       404:
- *         description: Не знайдено
+ *       '200':
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Item'
+ *       '404':
+ *         description: Not found
+ */
+app.get('/inventory/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM items WHERE id = $1', [req.params.id]);
+    if (rows.length === 0) return res.status(404).send('Not found');
+
+    const item = rows[0];
+    res.status(200).json({
+      ...item,
+      photoUrl: item.photo
+        ? `http://localhost:${options.port}/inventory/${item.id}/photo`
+        : null
+    });
+  } catch (err) {
+    res.status(500).send('Database Error');
+  }
+});
+
+/**
+ * @openapi
+ * /inventory/{id}:
  *   put:
- *     summary: Оновити дані предмета
- *     tags: [Inventory]
+ *     tags:
+ *       - Inventory
+ *     summary: Оновити заголовок або опис елементу
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
- *           type: string
+ *           type: integer
  *     requestBody:
  *       content:
  *         application/json:
@@ -201,191 +232,213 @@ app.all('/inventory', (req, res) => res.status(405).send('Method not allowed'));
  *               description:
  *                 type: string
  *     responses:
- *       200:
- *         description: Оновлено
- *       404:
- *         description: Не знайдено
+ *       '200':
+ *         description: Updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Item'
+ *       '404':
+ *         description: Not found
+ */
+app.put('/inventory/:id', async (req, res) => {
+  const { inventory_name, description } = req.body;
+  try {
+    const query = `
+      UPDATE items 
+      SET title = COALESCE($1, title), 
+          description = COALESCE($2, description) 
+      WHERE id = $3 
+      RETURNING *`;
+    const { rows } = await pool.query(query, [inventory_name, description, req.params.id]);
+    
+    if (rows.length === 0) return res.status(404).send('Not found');
+    res.status(200).json(rows[0]);
+  } catch (err) {
+    res.status(500).send('Database Error');
+  }
+});
+
+/**
+ * @openapi
+ * /inventory/{id}:
  *   delete:
- *     summary: Видалити предмет
- *     tags: [Inventory]
+ *     tags:
+ *       - Inventory
+ *     summary: Видалити елемент інвентарю
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
- *           type: string
+ *           type: integer
  *     responses:
- *       200:
- *         description: Видалено
- *       404:
- *         description: Не знайдено
- *   x-other-methods:
- *     405:
- *       description: Method not allowed
+ *       '200':
+ *         description: Deleted successfully
+ *       '404':
+ *         description: Not found
  */
-app.get('/inventory/:id', (req, res) => {
-  const item = inventoryDB.find((i) => i.id === req.params.id);
-  if (!item) return res.status(404).send('Not found');
+app.delete('/inventory/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT photo FROM items WHERE id = $1', [req.params.id]);
+    if (rows.length === 0) return res.status(404).send('Not found');
 
-  res.status(200).json({
-    ...item,
-    photoUrl: item.photo
-      ? `http://${options.host}:${options.port}/inventory/${item.id}/photo`
-      : null
-  });
-});
+    const photo = rows[0].photo;
+    if (photo) {
+      const photoPath = path.join(cacheDir, photo);
+      if (fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
+    }
 
-app.put('/inventory/:id', (req, res) => {
-  const itemIndex = inventoryDB.findIndex((i) => i.id === req.params.id);
-  if (itemIndex === -1) return res.status(404).send('Not found');
-
-  const { inventory_name, description } = req.body;
-  if (inventory_name) inventoryDB[itemIndex].inventory_name = inventory_name;
-  if (description !== undefined) inventoryDB[itemIndex].description = description;
-
-  saveDB();
-  res.status(200).json(inventoryDB[itemIndex]);
-});
-
-app.delete('/inventory/:id', (req, res) => {
-  const itemIndex = inventoryDB.findIndex((i) => i.id === req.params.id);
-  if (itemIndex === -1) return res.status(404).send('Not found');
-
-  const item = inventoryDB[itemIndex];
-  if (item.photo) {
-    const photoPath = path.join(cacheDir, item.photo);
-    if (fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
+    await pool.query('DELETE FROM items WHERE id = $1', [req.params.id]);
+    res.status(200).send('Deleted successfully');
+  } catch (err) {
+    res.status(500).send('Database Error');
   }
-
-  inventoryDB.splice(itemIndex, 1);
-  saveDB();
-  res.status(200).send('Deleted successfully');
 });
-app.all('/inventory/:id', (req, res) => res.status(405).send('Method not allowed'));
 
 /**
  * @openapi
  * /inventory/{id}/photo:
  *   get:
- *     summary: Отримати фото предмета
- *     tags: [Media]
+ *     tags:
+ *       - Inventory
+ *     summary: Отримати фото елементу
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
- *           type: string
+ *           type: integer
  *     responses:
- *       200:
+ *       '200':
  *         description: JPEG image
- *       404:
- *         description: Не знайдено
+ *         content:
+ *           image/jpeg:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       '404':
+ *         description: Not found
+ */
+app.get('/inventory/:id/photo', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT photo FROM items WHERE id = $1', [req.params.id]);
+    if (rows.length === 0 || !rows[0].photo) return res.status(404).send('Not found');
+
+    const photoPath = path.join(cacheDir, rows[0].photo);
+    if (!fs.existsSync(photoPath)) return res.status(404).send('File not found');
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.sendFile(photoPath);
+  } catch (err) {
+    res.status(500).send('Database Error');
+  }
+});
+
+/**
+ * @openapi
+ * /inventory/{id}/photo:
  *   put:
- *     summary: Оновити фото предмета
- *     tags: [Media]
+ *     tags:
+ *       - Inventory
+ *     summary: Завантажити або оновити фото для елементу
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
- *           type: string
+ *           type: integer
  *     requestBody:
  *       required: true
  *       content:
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [photo]
  *             properties:
  *               photo:
  *                 type: string
  *                 format: binary
  *     responses:
- *       200:
- *         description: Фото оновлено
- *       400:
- *         description: Фото не передано
- *       404:
- *         description: Не знайдено
- *   x-other-methods:
- *     405:
- *       description: Method not allowed
+ *       '200':
+ *         description: Photo updated
+ *       '400':
+ *         description: Bad Request
+ *       '404':
+ *         description: Not found
  */
-app.get('/inventory/:id/photo', (req, res) => {
-  const item = inventoryDB.find((i) => i.id === req.params.id);
-  if (!item || !item.photo) return res.status(404).send('Not found');
-
-  const photoPath = path.join(cacheDir, item.photo);
-  if (!fs.existsSync(photoPath)) return res.status(404).send('Not found');
-
-  res.setHeader('Content-Type', 'image/jpeg');
-  res.sendFile(photoPath, { dotfiles: 'allow' });
-});
-
-app.put('/inventory/:id/photo', upload.single('photo'), (req, res) => {
-  const itemIndex = inventoryDB.findIndex((i) => i.id === req.params.id);
-  if (itemIndex === -1) return res.status(404).send('Not found');
+app.put('/inventory/:id/photo', upload.single('photo'), async (req, res) => {
   if (!req.file) return res.status(400).send('Bad Request: photo is required');
 
-  const oldPhoto = inventoryDB[itemIndex].photo;
-  if (oldPhoto) {
-    const oldPath = path.join(cacheDir, oldPhoto);
-    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-  }
+  try {
+    const { rows } = await pool.query('SELECT photo FROM items WHERE id = $1', [req.params.id]);
+    if (rows.length === 0) return res.status(404).send('Not found');
 
-  inventoryDB[itemIndex].photo = req.file.filename;
-  saveDB();
-  res.status(200).send('Photo updated');
+    const oldPhoto = rows[0].photo;
+    if (oldPhoto) {
+      const oldPath = path.join(cacheDir, oldPhoto);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    await pool.query('UPDATE items SET photo = $1 WHERE id = $2', [req.file.filename, req.params.id]);
+    res.status(200).send('Photo updated');
+  } catch (err) {
+    res.status(500).send('Database Error');
+  }
 });
-app.all('/inventory/:id/photo', (req, res) =>
-  res.status(405).send('Method not allowed')
-);
 
 /**
  * @openapi
  * /search:
  *   post:
- *     summary: Пошук предмета
- *     tags: [Actions]
+ *     tags:
+ *       - Inventory
+ *     summary: Пошук елементу за id з опцією отримати посилання на фото
  *     requestBody:
  *       required: true
  *       content:
- *         application/x-www-form-urlencoded:
+ *         application/json:
  *           schema:
  *             type: object
- *             required: [id]
  *             properties:
  *               id:
- *                 type: string
+ *                 type: integer
  *               has_photo:
  *                 type: string
- *                 description: Передайте значення on, щоб додати URL фото в опис
+ *                 description: '"on" to include photo URL in description'
  *     responses:
- *       200:
- *         description: Предмет знайдено
- *       404:
- *         description: Не знайдено
- *   x-other-methods:
- *     405:
- *       description: Method not allowed
+ *       '200':
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Item'
+ *       '404':
+ *         description: Not found
  */
-app.post('/search', (req, res) => {
+app.post('/search', async (req, res) => {
   const { id, has_photo } = req.body;
-  const item = inventoryDB.find((i) => i.id === id);
-  if (!item) return res.status(404).send('Not found');
+  try {
+    const { rows } = await pool.query('SELECT * FROM items WHERE id = $1', [id]);
+    if (rows.length === 0) return res.status(404).send('Not found');
 
-  const responseData = { ...item };
-  if (has_photo === 'on' && item.photo) {
-    responseData.description += ` (Photo URL: http://${options.host}:${options.port}/inventory/${item.id}/photo)`;
+    const item = rows[0];
+    const responseData = { ...item };
+    if (has_photo === 'on' && item.photo) {
+      responseData.description += ` (Photo URL: http://localhost:${options.port}/inventory/${item.id}/photo)`;
+    }
+
+    res.status(200).json(responseData);
+  } catch (err) {
+    res.status(500).send('Database Error');
   }
-
-  res.status(200).json(responseData);
 });
-app.all('/search', (req, res) => res.status(405).send('Method not allowed'));
+
+app.all(['/register', '/inventory', '/inventory/:id', '/inventory/:id/photo', '/search'], (req, res) => {
+  res.status(405).send('Method not allowed');
+});
 
 const server = http.createServer(app);
 server.listen(options.port, options.host, () => {
-  console.log(`Server is running at http://${options.host}:${options.port}`);
-  console.log(`Cache directory: ${cacheDir}`);
-  console.log(`Swagger: http://${options.host}:${options.port}/docs`);
+  console.log(`Server is running at http://localhost:${options.port}`);
+  console.log(`Swagger: http://localhost:${options.port}/docs`);
 });
