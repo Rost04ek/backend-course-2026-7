@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const { program } = require('commander');
 const fs = require('fs');
@@ -6,6 +7,7 @@ const multer = require('multer');
 const http = require('http');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+const { Pool } = require('pg');
 
 program
   .requiredOption('-H, --host <host>', 'адреса сервера', process.env.HOST || '0.0.0.0')
@@ -15,7 +17,7 @@ program
 program.parse(process.argv);
 const options = program.opts();
 
-const db = new DB({
+const pool = new Pool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
