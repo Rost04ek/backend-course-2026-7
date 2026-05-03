@@ -148,7 +148,9 @@ app.post('/register', upload.single('photo'), async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Items'
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Item'
  *       '500':
  *         description: Server error
  */
