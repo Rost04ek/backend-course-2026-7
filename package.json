@@ -1,0 +1,33 @@
+{
+  "name": "backend-course-2026-6",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "nodemon main.js --host localhost --port 3000 --cache .cache",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rost04ek/backend-course-2026-6.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Rost04ek/backend-course-2026-6/issues"
+  },
+  "homepage": "https://github.com/Rost04ek/backend-course-2026-6#readme",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "superagent": "^10.3.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

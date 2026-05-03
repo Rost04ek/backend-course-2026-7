@@ -1,0 +1,230 @@
+{
+  "info": {
+    "_postman_id": "c3c32bd7-2656-4c59-a87d-53ee59d0530a",
+    "name": "backend-course-2026-6",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "54325899",
+    "_collection_link": "https://go.postman.co/collection/54325899-c3c32bd7-2656-4c59-a87d-53ee59d0530a?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "inventory_name",
+              "value": "wood",
+              "type": "text",
+              "uuid": "8e7913ab-cc90-427f-8ebe-475a0c658f78"
+            },
+            {
+              "key": "description",
+              "value": "",
+              "type": "text",
+              "uuid": "76e8074d-7767-452b-b7fd-706773cbaa73"
+            },
+            {
+              "key": "photo",
+              "type": "file",
+              "uuid": "6ae0b1f2-9b10-448d-aca9-bc3f22c0644f",
+              "value": null
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:3000/register",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "register"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "All Inventory",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/inventory",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "inventory"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Single Item",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/inventory/1777233470883",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "inventory",
+            "1777233470883"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Update Item",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"inventory_name\": \"Updated Name\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/inventory/1777233427670",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "inventory",
+            "1777233427670"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Update Photo",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "photo",
+              "type": "file",
+              "uuid": "42114835-b692-43c6-9dd1-cdc7642c46bb",
+              "value": null
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:3000/inventory/1777234775051/photo",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "inventory",
+            "1777234775051",
+            "photo"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Item",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/inventory/1777233383107",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "inventory",
+            "1777233383107"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Search",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "id",
+              "value": "1777234775051",
+              "type": "text",
+              "uuid": "c2594090-9869-4242-99ad-f54af286ca75"
+            },
+            {
+              "key": "has_photo",
+              "value": "on",
+              "type": "text",
+              "uuid": "6e8ee99c-a730-4d59-bdc6-b42ae4bb4714"
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:3000/search",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "search"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Photo",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/inventory/1777234775051/photo",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "inventory",
+            "1777234775051",
+            "photo"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
